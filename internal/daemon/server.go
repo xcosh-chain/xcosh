@@ -74,6 +74,66 @@ func RunNodeDaemon(port string, connectPeer string) {
 	// Start the JSON-RPC server with authentication using settings from xcosh.conf.
 	rpc.StartRPCServer(rpcPort, ledger, cfg)
 
+	// Daftarkan handler RPC khusus untuk perintah CLI (generate / mining & addnode)
+	rpc.RegisterCommandHandler("generate", func(params []interface{}) (interface{}, error) {
+		blocksCount := 1
+		targetAddr := addrMiner
+
+		if len(params) > 0 {
+			if bc, ok := params[0].(float64); ok {
+				blocksCount = int(bc)
+			}
+		}
+		if len(params) > 1 {
+			if ta, ok := params[1].(string); ok && ta != "" {
+				targetAddr = ta
+			}
+		}
+
+		fmt.Printf("[RPC-MINER] Triggering manual mining of %d block(s) to address: %s\n", blocksCount, targetAddr)
+		
+		ledger.Mu.Lock()
+		diskMempool := cli.LoadMempoolFromDisk()
+		if len(diskMempool) > 0 {
+			ledger.Mempool = diskMempool
+		}
+		ledger.Mu.Unlock()
+
+		minedHashes := []string{}
+		for i := 0; i < blocksCount; i++ {
+			block := ledger.MineBlock()
+			if block != nil {
+				minedHashes = append(minedHashes, fmt.Sprintf("Block #%d mined successfully", block.Index))
+			}
+		}
+		cli.SaveMempoolToDisk([]*core.Transfer{})
+
+		return map[string]interface{}{
+			"status": "success",
+			"mined":  blocksCount,
+			"target": targetAddr,
+			"details": minedHashes,
+		}, nil
+	})
+
+	rpc.RegisterCommandHandler("addnode", func(params []interface{}) (interface{}, error) {
+		if len(params) == 0 {
+			return nil, fmt.Errorf("peer address required")
+		}
+		peerAddr, ok := params[0].(string)
+		if !ok || peerAddr == "" {
+			return nil, fmt.Errorf("invalid peer address parameter")
+		}
+
+		fmt.Printf("[RPC-P2P] Connecting to manual peer via daemon: %s\n", peerAddr)
+		go server.ConnectToPeer(peerAddr)
+
+		return map[string]interface{}{
+			"status": "connected",
+			"peer":   peerAddr,
+		}, nil
+	})
+
 	// Initialize the block reorganization manager.
 	reorgManager := internal.NewBlockReorgManager()
 
