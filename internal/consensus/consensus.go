@@ -142,7 +142,7 @@ func ValidatePoW(blockHashHex string, difficultyBits uint64) bool {
 
 // ComputeHeaderHash calculates the cryptographic Keccak-256 hash representation, now bound tightly with macroeconomic parameters.
 func ComputeHeaderHash(prevHash string, merkleRoot string, timestamp int64, nonce uint64, message string) string {
-	// Bind MaxSupply and BlockReward directly into the header hash payload so that any macroeconomic modification strictly enforces a Bitcoin-style absolute hard fork!
+	// Bind MaxSupply and BlockReward directly into the header hash payload so that any macroeconomic modification strictly enforces an absolute hard fork!
 	record := bytes.Join([][]byte{
 		[]byte(prevHash),
 		[]byte(merkleRoot),
