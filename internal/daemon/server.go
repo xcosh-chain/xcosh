@@ -56,10 +56,14 @@ func RunNodeDaemon(port string, connectPeer string) {
 		rpcPort = cfg.RPCPort
 	}
 
-	// Override port with configuration file setting if default port is used.
+	// Override port with configuration file setting safely and ensure correct address format.
 	serverPort := port
-	if serverPort == ":19333" && cfg != nil && cfg.Port != ":19333" {
-		serverPort = cfg.Port
+	if cfg != nil && cfg.Port != "" {
+		if cfg.Port[0] != ':' {
+			serverPort = ":" + cfg.Port
+		} else {
+			serverPort = cfg.Port
+		}
 	}
 
 	// INITIALIZATION OF THE LEDGER STRUCT WITH SPECIFIED DATA DIRECTORY AND MINER ADDRESS
