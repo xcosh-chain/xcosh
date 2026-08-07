@@ -110,7 +110,7 @@ func HandleCheckSupply() {
 	circulatingSupply := totalBlocks * rewardPerBlock
 
 	fmt.Println("================================================================================")
-	fmt.Println("                         XCOSH COIN SUPPLY STATISTICS                           ")
+	fmt.Println("                            XCOSH COIN SUPPLY STATISTICS                        ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Max Supply         : %.8f Coins\n", node.ToDecimal(maxSupply))
 	fmt.Printf(" Circulating Supply : %.8f Coins\n", node.ToDecimal(circulatingSupply))
@@ -324,7 +324,7 @@ func HandleCheckFees() {
 
 	count, highest, avg := ledger.GetMempoolFeeStats()
 	fmt.Println("================================================================================")
-	fmt.Println("                         XCOSH MEMPOOL FEE MARKET                               ")
+	fmt.Println("                        XCOSH MEMPOOL FEE MARKET                            ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Pending Transactions in Mempool : %d\n", count)
 	fmt.Printf(" Highest Priority Fee          : %.8f Coins\n", node.ToDecimal(highest))
@@ -415,7 +415,7 @@ func HandleRPCClient(method string, params []interface{}) {
 	dataDir := GetDataDir()
 	cfg, err := internal.LoadConfig(dataDir)
 	
-	rpcPort := "19332"
+	rpcPort := "19333"
 	var rpcUser, rpcPass string
 	
 	if err == nil && cfg != nil {
