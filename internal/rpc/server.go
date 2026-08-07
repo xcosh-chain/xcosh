@@ -5,7 +5,7 @@
 // Project: Xcosh / Blockchain Core
 //
 // you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at. <http://www.apache.org/licenses/LICENSE-2.0>
+// You may obtain a copy of the License at <http://www.apache.org/licenses/LICENSE-2.0>
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,12 +19,14 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"time"
 
 	"xcosh/internal"
+	"xcosh/internal/p2p"
 	"xcosh/node"
 	"xcosh/storage/wallet"
 )
@@ -227,6 +229,33 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 				"paytxfee":        0.00001000,
 				"relayfee":        0.00000010,
 				"errors":          "",
+			}
+
+		case "addnode":
+			// Handle manual peer registration and persistence via RPC
+			if len(req.Params) > 0 {
+				if peerAddr, ok := req.Params[0].(string); ok {
+					dataDir := internal.GetDataDirCustom()
+					am := p2p.NewAddrManager(dataDir)
+					
+					if host, portStr, err := net.SplitHostPort(peerAddr); err == nil {
+						var port int
+						fmt.Sscanf(portStr, "%d", &port)
+						am.AddAddress(host, port)
+					}
+
+					response.Result = fmt.Sprintf("Successfully added peer to addrman: %s", peerAddr)
+				} else {
+					response.Error = map[string]interface{}{
+						"code":    -32602,
+						"message": "Invalid params: peer address must be a string",
+					}
+				}
+			} else {
+				response.Error = map[string]interface{}{
+					"code":    -32602,
+					"message": "Missing parameter: peer address required",
+				}
 			}
 
 		case "stop":
