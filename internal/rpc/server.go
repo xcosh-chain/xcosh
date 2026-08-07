@@ -46,11 +46,13 @@ type RPCResponse struct {
 
 // StartRPCServer starts the JSON-RPC HTTP server with Basic Authentication on the specified port.
 func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
+	// INITIALIZATION OF NEW HTTP SERVE MUX INSTANCE FOR ROUTING PURPOSES
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Validate HTTP Basic Authentication credentials against configuration settings using constant-time comparison.
 		user, pass, ok := r.BasicAuth()
+		// EVALUATION OF CREDENTIAL VALIDITY UTILIZING CONSTANT TIME COMPARISON ALGORITHM FOR SECURITY ENFORCEMENT
 		if !ok || cfg == nil || 
 			subtle.ConstantTimeCompare([]byte(user), []byte(cfg.RPCUser)) != 1 || 
 			subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.RPCPassword)) != 1 {
@@ -59,6 +61,7 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			return
 		}
 
+		// ENFORCE THAT INCOMING HTTP REQUEST METHOD MUST STRICTLY BE POST
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -66,6 +69,7 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 
 		var req RPCRequest
 		decoder := json.NewDecoder(r.Body)
+		// DECODE INCOMING JSON PAYLOAD INTO THE RPC REQUEST STRUCTURE INSTANCE
 		if err := decoder.Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
@@ -74,11 +78,13 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 		w.Header().Set("Content-Type", "application/json")
 		response := RPCResponse{ID: req.ID}
 
+		// REFLECTION UTILITY EXTRACTION OF LEDGER OBJECT VALUE AND TYPE INFORMATION
 		v := reflect.ValueOf(ledger)
 		if v.Kind() == reflect.Ptr {
 			v = v.Elem()
 		}
 
+		// SWITCH STATEMENT EVALUATING THE REQUESTED RPC METHOD STRING IDENTIFIER
 		switch req.Method {
 		case "getblockcount":
 			// Retrieve the total number of blocks dynamically from the blockchain ledger chain.
@@ -150,7 +156,7 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			}
 
 		case "getinfo":
-			// Gather comprehensive real-time node metrics mimicking Bitcoin Core getinfo output.
+			// Gather comprehensive real-time node metrics mimicking Core getinfo output.
 			blocks := 0
 			difficulty := 0.0
 
@@ -226,6 +232,7 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 		case "stop":
 			// Gracefully stop the RPC server and node daemon.
 			response.Result = "Xcosh server stopping..."
+			// EXECUTE ASYNCHRONOUS SHUTDOWN PROCEDURE AFTER A DELAY INTERVAL
 			go func() {
 				time.Sleep(1 * time.Second)
 				os.Exit(0)
@@ -239,11 +246,13 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			}
 		}
 
+		// ENCODE AND WRITE RESPONSE STRUCT DIRECTLY TO HTTP RESPONSE WRITER STREAM
 		json.NewEncoder(w).Encode(response)
 	})
 
 	addr := fmt.Sprintf(":%s", rpcPort)
 	fmt.Printf("[RPC] JSON-RPC server listening (Auth Enabled) on port %s\n", rpcPort)
+	// SPAWN BACKGROUND LISTENER ROUTINE FOR HTTP SERVER OPERATION
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			fmt.Printf("[RPC] Server error: %v\n", err)
@@ -253,9 +262,11 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 
 // filepathJoinWallet constructs and returns the absolute file path for the local wallet data file.
 func filepathJoinWallet(cfg *internal.Config) string {
+	// RETRIEVAL OF USER HOME DIRECTORY PATH STRING FOR WALLET FILE LOCATION RESOLUTION
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "wallet.dat"
 	}
+	// CONSTRUCTION OF FULL FILE PATH STRING COMBINING HOME DIRECTORY WITH WALLET SUBPATH
 	return home + "/.xcosh/wallet.dat"
 }
