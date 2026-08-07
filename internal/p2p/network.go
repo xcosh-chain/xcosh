@@ -102,6 +102,14 @@ func (s *Server) StartListening(onBlockReceived func(*core.LedgerBlock), onTxRec
 		if remoteAddr := conn.RemoteAddr(); remoteAddr != nil {
 			if tcpAddr, ok := remoteAddr.(*net.TCPAddr); ok {
 				s.AddrManager.AddAddress(tcpAddr.IP.String(), tcpAddr.Port)
+				
+				// Simpan juga koneksi masuk ke map peers jika belum ada
+				s.Mu.Lock()
+				peerKey := tcpAddr.String()
+				if _, exists := s.Peers[peerKey]; !exists {
+					s.Peers[peerKey] = conn
+				}
+				s.Mu.Unlock()
 			}
 		}
 
@@ -112,7 +120,14 @@ func (s *Server) StartListening(onBlockReceived func(*core.LedgerBlock), onTxRec
 
 // handleConnection processes incoming message streams from established peer connections.
 func (s *Server) handleConnection(conn net.Conn, onBlock func(*core.LedgerBlock), onTx func(*core.Transfer)) {
-	defer conn.Close()
+	remoteAddrStr := conn.RemoteAddr().String()
+	defer func() {
+		conn.Close()
+		s.Mu.Lock()
+		delete(s.Peers, remoteAddrStr)
+		s.Mu.Unlock()
+	}()
+
 	decoder := json.NewDecoder(conn)
 	// Continuously decode incoming message envelopes from the active network stream.
 	for {
@@ -169,6 +184,13 @@ func (s *Server) Broadcast(msgType MessageType, data interface{}) {
 
 // ConnectToPeer establishes an outbound TCP connection to another active network peer.
 func (s *Server) ConnectToPeer(peerAddr string) error {
+	s.Mu.Lock()
+	if _, exists := s.Peers[peerAddr]; exists {
+		s.Mu.Unlock()
+		return fmt.Errorf("already connected to peer %s", peerAddr)
+	}
+	s.Mu.Unlock()
+
 	// Dial an outbound TCP network connection to the specified remote peer address.
 	conn, err := net.Dial("tcp", peerAddr)
 	if err != nil {
