@@ -27,7 +27,7 @@ import (
 // acting as the primary P2P node runner.
 func RunNodeDaemon(port string, connectPeer string) {
 	// IT IS HEREBY NOTED THAT THE SYSTEM SHALL OUTPUT A CONSOLE NOTIFICATION REGARDING DAEMON INITIALIZATION
-	fmt.Println("[SYS] Booting Xcosh Live Node Daemon (Core Style)...")
+	fmt.Println("[SYS] Booting Xcosh Live Node Daemon...")
 	
 	// Record the system startup timestamp for precise uptime tracking functionality.
 	internal.RecordStartTime()
