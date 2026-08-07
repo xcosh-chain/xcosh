@@ -237,6 +237,9 @@ func HandleAddNode(peerAddr string) {
 	fmt.Printf(" Successfully added peer to addrman database: %s:%d\n", host, port)
 	fmt.Printf(" Persisted to : %s/peers_addrman.json\n", dataDir)
 	fmt.Println("================================================================================")
+
+	// Kirim perintah langsung ke daemon via RPC agar langsung melakukan koneksi aktif (dial)
+	HandleRPCClient("addnode", []interface{}{peerAddr})
 }
 
 // HandleManualMine executes iterative Proof-of-Work block mining targeting a specific reward address.
@@ -333,7 +336,7 @@ func HandleCheckFees() {
 func HandleCheckUptime() {
 	_, uptimeFormatted := internal.GetUptime()
 	fmt.Println("================================================================")
-	fmt.Println("                  XCOSH NODE UPTIME INFO                 ")
+	fmt.Println("                 XCOSH NODE UPTIME INFO                 ")
 	fmt.Println("================================================================")
 	fmt.Printf(" Uptime: %s\n", uptimeFormatted)
 	fmt.Println("================================================================")
