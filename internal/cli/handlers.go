@@ -110,7 +110,7 @@ func HandleCheckSupply() {
 	circulatingSupply := totalBlocks * rewardPerBlock
 
 	fmt.Println("================================================================================")
-	fmt.Println("                            XCOSH COIN SUPPLY STATISTICS                        ")
+	fmt.Println("                             XCOSH COIN SUPPLY STATISTICS                       ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Max Supply         : %.8f Coins\n", node.ToDecimal(maxSupply))
 	fmt.Printf(" Circulating Supply : %.8f Coins\n", node.ToDecimal(circulatingSupply))
@@ -238,11 +238,11 @@ func HandleAddNode(peerAddr string) {
 	fmt.Printf(" Persisted to : %s/peers_addrman.json\n", dataDir)
 	fmt.Println("================================================================================")
 
-	// Kirim perintah langsung ke daemon via RPC agar langsung melakukan koneksi aktif (dial)
+	// Teruskan perintah ke daemon via RPC agar langsung dieksekusi tanpa database locked
 	HandleRPCClient("addnode", []interface{}{peerAddr})
 }
 
-// HandleManualMine executes iterative Proof-of-Work block mining targeting a specific reward address.
+// HandleManualMine executes iterative Proof-of-Work block mining via RPC daemon.
 func HandleManualMine(blocksCount int, targetAddress string) {
 	wf, err := wallet.LoadWallet()
 	if targetAddress == "" {
@@ -253,24 +253,10 @@ func HandleManualMine(blocksCount int, targetAddress string) {
 		}
 	}
 
-	fmt.Printf("[CLI] Triggering Manual Block Mining (Target Address: %s)...\n", targetAddress)
-	dataDir := GetDataDir()
-	ledger := node.InitializeLedger(dataDir, 1, targetAddress)
+	fmt.Printf("[CLI] Dispatching Manual Block Mining command to daemon (Blocks: %d, Target: %s)...\n", blocksCount, targetAddress)
 	
-	diskMempool := LoadMempoolFromDisk()
-	if len(diskMempool) > 0 {
-		ledger.Mu.Lock()
-		ledger.Mempool = diskMempool
-		ledger.Mu.Unlock()
-	}
-
-	for i := 0; i < blocksCount; i++ {
-		fmt.Printf("[NODE] Mining block %d of %d...\n", i+1, blocksCount)
-		ledger.MineBlock()
-	}
-	
-	SaveMempoolToDisk([]*core.Transfer{})
-	fmt.Println("[CLI] Mining completed successfully!")
+	// Meneruskan perintah mining ke daemon via JSON-RPC agar tidak bentrok akses LevelDB
+	HandleRPCClient("generate", []interface{}{blocksCount, targetAddress})
 }
 
 // HandleExploreBlockchain parses and inspects structural blockchain blocks directly from storage.
@@ -324,7 +310,7 @@ func HandleCheckFees() {
 
 	count, highest, avg := ledger.GetMempoolFeeStats()
 	fmt.Println("================================================================================")
-	fmt.Println("                        XCOSH MEMPOOL FEE MARKET                            ")
+	fmt.Println("                        XCOSH MEMPOOL FEE MARKET                                ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Pending Transactions in Mempool : %d\n", count)
 	fmt.Printf(" Highest Priority Fee          : %.8f Coins\n", node.ToDecimal(highest))
@@ -336,7 +322,7 @@ func HandleCheckFees() {
 func HandleCheckUptime() {
 	_, uptimeFormatted := internal.GetUptime()
 	fmt.Println("================================================================")
-	fmt.Println("                 XCOSH NODE UPTIME INFO                 ")
+	fmt.Println("                XCOSH NODE UPTIME INFO                  ")
 	fmt.Println("================================================================")
 	fmt.Printf(" Uptime: %s\n", uptimeFormatted)
 	fmt.Println("================================================================")
@@ -389,7 +375,7 @@ func HandleGetBlock(targetHash string) {
 		return
 	}
 	fmt.Println("================================================================")
-	fmt.Println("                 XCOSH BLOCK JSON DATA                          ")
+	fmt.Println("                XCOSH BLOCK JSON DATA                          ")
 	fmt.Println("================================================================")
 	fmt.Println(string(jsonData))
 	fmt.Println("================================================================")
@@ -415,7 +401,7 @@ func HandleRPCClient(method string, params []interface{}) {
 	dataDir := GetDataDir()
 	cfg, err := internal.LoadConfig(dataDir)
 	
-	rpcPort := "19333"
+	rpcPort := "19332" // Diubah ke default port RPC 19332
 	var rpcUser, rpcPass string
 	
 	if err == nil && cfg != nil {
