@@ -63,6 +63,24 @@ func getDataDirInternal() string {
 	return dir
 }
 
+// savePeersToDisk writes the list of active peer addresses to disk for CLI inspection.
+func (s *Server) savePeersToDisk() {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	peersList := make([]string, 0, len(s.Peers))
+	for addr := range s.Peers {
+		peersList = append(peersList, addr)
+	}
+
+	data, err := json.MarshalIndent(peersList, "", "    ")
+	if err != nil {
+		return
+	}
+	filePath := filepath.Join(getDataDirInternal(), "peers.json")
+	os.WriteFile(filePath, data, 0644)
+}
+
 // NewServer initializes a new P2P network server instance along with the address manager.
 func NewServer(address string) *Server {
 	mux := http.NewServeMux()
@@ -110,6 +128,9 @@ func (s *Server) StartListening(onBlockReceived func(*core.LedgerBlock), onTxRec
 					s.Peers[peerKey] = conn
 				}
 				s.Mu.Unlock()
+
+				// Update file peers.json di disk
+				s.savePeersToDisk()
 			}
 		}
 
@@ -126,6 +147,8 @@ func (s *Server) handleConnection(conn net.Conn, onBlock func(*core.LedgerBlock)
 		s.Mu.Lock()
 		delete(s.Peers, remoteAddrStr)
 		s.Mu.Unlock()
+		// Update file peers.json di disk saat koneksi terputus
+		s.savePeersToDisk()
 	}()
 
 	decoder := json.NewDecoder(conn)
@@ -201,6 +224,9 @@ func (s *Server) ConnectToPeer(peerAddr string) error {
 	// Store the established connection inside the active peer tracking map.
 	s.Peers[peerAddr] = conn
 	s.Mu.Unlock()
+
+	// Update file peers.json di disk
+	s.savePeersToDisk()
 
 	// Parse host and port to register into AddrManager database
 	if host, portStr, err := net.SplitHostPort(peerAddr); err == nil {
