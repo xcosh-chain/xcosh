@@ -235,7 +235,12 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			// Handle manual peer registration and persistence via RPC
 			if len(req.Params) > 0 {
 				if peerAddr, ok := req.Params[0].(string); ok {
-					dataDir := internal.GetDataDirCustom()
+					home, err := os.UserHomeDir()
+					dataDir := "."
+					if err == nil {
+						dataDir = home + "/.xcosh"
+					}
+					
 					am := p2p.NewAddrManager(dataDir)
 					
 					if host, portStr, err := net.SplitHostPort(peerAddr); err == nil {
