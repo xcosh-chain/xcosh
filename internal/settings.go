@@ -34,7 +34,7 @@ type Config struct {
 // It returns a pointer to a Config struct populated with the parsed values, 
 // or falls back to default settings if the configuration file does not exist.
 func LoadConfig(dataDir string) (*Config, error) {
-	// Initialize default configuration matching standard Bitcoin Core behavior
+	// Initialize default configuration matching standard core behavior
 	cfg := &Config{
 		Port:        ":19333",
 		RPCPort:     "19332",
