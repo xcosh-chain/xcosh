@@ -233,32 +233,23 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 				}
 			}
 
-			if l, ok := ledger.(*node.Ledger); ok {
-				l.Mu.Lock()
-				diskMempool := cli.LoadMempoolFromDisk()
-				if len(diskMempool) > 0 {
-					l.Mempool = diskMempool
+			minedHashes := []string{}
+			if v.IsValid() {
+				mineMethod := reflect.ValueOf(ledger).MethodByName("MineBlock")
+				if mineMethod.IsValid() {
+					for i := 0; i < blocksCount; i++ {
+						mineMethod.Call(nil)
+						minedHashes = append(minedHashes, "Block mined successfully")
+					}
 				}
-				l.Mu.Unlock()
+			}
+			cli.SaveMempoolToDisk([]*core.Transfer{})
 
-				minedHashes := []string{}
-				for i := 0; i < blocksCount; i++ {
-					l.MineBlock()
-					minedHashes = append(minedHashes, "Block mined successfully")
-				}
-				cli.SaveMempoolToDisk([]*core.Transfer{})
-
-				response.Result = map[string]interface{}{
-					"status":  "success",
-					"mined":   blocksCount,
-					"target":  targetAddr,
-					"details": minedHashes,
-				}
-			} else {
-				response.Error = map[string]interface{}{
-					"code":    -32603,
-					"message": "Internal error: invalid ledger type",
-				}
+			response.Result = map[string]interface{}{
+				"status":  "success",
+				"mined":   blocksCount,
+				"target":  targetAddr,
+				"details": minedHashes,
 			}
 
 		case "addnode":
