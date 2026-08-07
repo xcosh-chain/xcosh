@@ -30,7 +30,7 @@ import (
 // main serves as the primary router entry point for the command-line interface application,
 // parsing operational arguments and dispatching execution flows to dedicated module handlers.
 func main() {
-	// Initialize distinct command-line flag sets for various administrative and operational subcommands.
+	// INITIALIZATION OF DISTINCT COMMAND-LINE FLAG SETS FOR VARIOUS ADMINISTRATIVE AND OPERATIONAL SUBCOMMANDS.
 	walletCreateCmd := flag.NewFlagSet("create", flag.ExitOnError)
 	balanceCmd := flag.NewFlagSet("balance", flag.ExitOnError)
 	supplyCmd := flag.NewFlagSet("supply", flag.ExitOnError)
@@ -48,7 +48,7 @@ func main() {
 	addNodeCmd := flag.NewFlagSet("addnode", flag.ExitOnError)
 	blockSizeCmd := flag.NewFlagSet("blocksize", flag.ExitOnError)
 
-	// Define specific parameter bindings for individual command flags.
+	// DEFINE SPECIFIC PARAMETER BINDINGS FOR INDIVIDUAL COMMAND FLAGS.
 	walletLabel := walletCreateCmd.String("label", "Default Account", "Label description for the new multi-wallet account")
 
 	sendRecipient := sendCmd.String("to", "", "Recipient destination address")
@@ -64,7 +64,7 @@ func main() {
 
 	addNodeTarget := addNodeCmd.String("to", "", "Target peer address to add (e.g., localhost:19333)")
 
-	// Validate whether adequate command-line arguments have been provided by the executing operator.
+	// VALIDATE WHETHER ADEQUATE COMMAND-LINE ARGUMENTS HAVE BEEN PROVIDED BY THE EXECUTING OPERATOR.
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -72,8 +72,8 @@ func main() {
 
 	subcommand := os.Args[1]
 
-	// Check if the command is meant to be handled via JSON-RPC client forwarding.
-	// Common RPC methods like getblockcount, getconnectioncount, getinfo, etc. can be passed directly.
+	// CHECK IF THE COMMAND IS MEANT TO BE HANDLED VIA JSON-RPC CLIENT FORWARDING.
+	// COMMON RPC METHODS LIKE getblockcount, getconnectioncount, getinfo, etc. CAN BE PASSED DIRECTLY.
 	switch subcommand {
 	case "create":
 		walletCreateCmd.Parse(os.Args[2:])
@@ -87,6 +87,7 @@ func main() {
 	case "send":
 		sendCmd.Parse(os.Args[2:])
 		var amountInUnits uint64
+		// PARSE STRING AMOUNT INTO 64-BIT FLOATING POINT REPRESENTATION AND CONVERT TO UNIT INTEGER
 		if val, err := strconv.ParseFloat(*sendAmountStr, 64); err == nil {
 			amountInUnits = uint64(val * 100000000)
 		} else {
@@ -103,6 +104,7 @@ func main() {
 		mineCmd.Parse(os.Args[2:])
 		cli.HandleManualMine(*mineBlocks, *mineAddress)
 	case "mining":
+		// EVALUATE LENGTH OF ARGUMENTS FOR MINING COMMAND SUB-EXECUTION
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: ./xcosh mining <target_address>")
 			os.Exit(1)
@@ -110,6 +112,7 @@ func main() {
 		miningCmd.Parse(os.Args[3:])
 		cli.HandleManualMine(1, os.Args[2])
 	case "addnode":
+		// EVALUATE LENGTH OF ARGUMENTS FOR ADDNODE COMMAND SUB-EXECUTION
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: ./xcosh addnode <host:port>")
 			os.Exit(1)
@@ -132,6 +135,7 @@ func main() {
 		blockSizeCmd.Parse(os.Args[2:])
 		cli.HandleCheckBlockSize()
 	case "getblockhash":
+		// EVALUATE LENGTH OF ARGUMENTS FOR GETBLOCKHASH COMMAND SUB-EXECUTION
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: ./xcosh getblockhash <block_index>")
 			os.Exit(1)
@@ -139,6 +143,7 @@ func main() {
 		getBlockHashCmd.Parse(os.Args[2:])
 		cli.HandleGetBlockHash(os.Args[2])
 	case "getblock":
+		// EVALUATE LENGTH OF ARGUMENTS FOR GETBLOCK COMMAND SUB-EXECUTION
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: ./xcosh getblock <block_hash>")
 			os.Exit(1)
@@ -146,8 +151,8 @@ func main() {
 		getBlockCmd.Parse(os.Args[2:])
 		cli.HandleGetBlock(os.Args[2])
 	default:
-		// Forward any other subcommand (such as getblockcount, getinfo, getconnectioncount)
-		// directly to the running daemon via the JSON-RPC client handler.
+		// FORWARD ANY OTHER SUBCOMMAND (SUCH AS getblockcount, getinfo, getconnectioncount)
+		// DIRECTLY TO THE RUNNING DAEMON VIA THE JSON-RPC CLIENT HANDLER.
 		var params []interface{}
 		for _, arg := range os.Args[2:] {
 			params = append(params, arg)
