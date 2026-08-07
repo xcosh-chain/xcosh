@@ -34,7 +34,7 @@ func Hash512(data []byte) []byte {
 	return sha3.Hash512(data)
 }
 
-// Hash256 computes a Keccak-256 cryptographic hash digest matching the Ethereum standard.
+// Hash256 computes a Keccak-256 cryptographic hash digest.
 func Hash256(data []byte) []byte {
 	d := golangSha3.NewLegacyKeccak256()
 	d.Write(data)
