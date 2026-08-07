@@ -110,7 +110,7 @@ func HandleCheckSupply() {
 	circulatingSupply := totalBlocks * rewardPerBlock
 
 	fmt.Println("================================================================================")
-	fmt.Println("                         XCOSH COIN SUPPLY STATISTICS                         ")
+	fmt.Println("                         XCOSH COIN SUPPLY STATISTICS                           ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Max Supply         : %.8f Coins\n", node.ToDecimal(maxSupply))
 	fmt.Printf(" Circulating Supply : %.8f Coins\n", node.ToDecimal(circulatingSupply))
@@ -184,27 +184,50 @@ func HandleSendTx(recipient string, amount uint64, fee uint64, senderAddr string
 	fmt.Printf("[MEMPOOL] Transaction broadcasted! ID: %s...\n", tx.ComputeID()[:16])
 }
 
-// HandleAddNode allows manual addition of a peer address to the addrman database.
+// HandleAddNode allows manual addition of a peer address to the addrman database with strict validation.
 func HandleAddNode(peerAddr string) {
 	if peerAddr == "" {
 		if len(os.Args) > 2 {
 			peerAddr = os.Args[2]
 		} else {
-			fmt.Println("[CLI] Error: Target peer address is required. Usage: ./xcosh addnode <host:port>")
+			fmt.Println("================================================================================")
+			fmt.Println(" [CLI ERROR] IP port salah! Target peer address is required.")
+			fmt.Println(" Usage: ./xcosh addnode <host:port>")
+			fmt.Println("================================================================================")
 			return
 		}
 	}
 
-	dataDir := GetDataDir()
+	// Validasi format host:port
 	host, portStr, err := net.SplitHostPort(peerAddr)
 	if err != nil {
-		fmt.Printf("[CLI] Invalid address format '%s'. Please use host:port (e.g., 127.0.0.1:19333)\n", peerAddr)
+		fmt.Println("================================================================================")
+		fmt.Println(" [CLI ERROR] IP port salah!")
+		fmt.Printf(" Detail: Format '%s' tidak valid. Gunakan format host:port (Contoh: 127.0.0.1:19333)\n", peerAddr)
+		fmt.Println("================================================================================")
 		return
 	}
 
 	var port int
-	fmt.Sscanf(portStr, "%d", &port)
+	_, err = fmt.Sscanf(portStr, "%d", &port)
+	if err != nil || port <= 0 || port > 65535 {
+		fmt.Println("================================================================================")
+		fmt.Println(" [CLI ERROR] IP port salah!")
+		fmt.Printf(" Detail: Port '%s' tidak valid (harus berupa angka antara 1 sampai 65535).\n", portStr)
+		fmt.Println("================================================================================")
+		return
+	}
 
+	// Validasi IP / Hostname
+	if net.ParseIP(host) == nil && host != "localhost" {
+		fmt.Println("================================================================================")
+		fmt.Println(" [CLI ERROR] IP port salah!")
+		fmt.Printf(" Detail: Alamat IP '%s' tidak dikenali atau salah format.\n", host)
+		fmt.Println("================================================================================")
+		return
+	}
+
+	dataDir := GetDataDir()
 	am := p2p.NewAddrManager(dataDir)
 	am.AddAddress(host, port)
 
@@ -298,7 +321,7 @@ func HandleCheckFees() {
 
 	count, highest, avg := ledger.GetMempoolFeeStats()
 	fmt.Println("================================================================================")
-	fmt.Println("                         XCOSH MEMPOOL FEE MARKET                             ")
+	fmt.Println("                         XCOSH MEMPOOL FEE MARKET                               ")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Pending Transactions in Mempool : %d\n", count)
 	fmt.Printf(" Highest Priority Fee          : %.8f Coins\n", node.ToDecimal(highest))
@@ -310,7 +333,7 @@ func HandleCheckFees() {
 func HandleCheckUptime() {
 	_, uptimeFormatted := internal.GetUptime()
 	fmt.Println("================================================================")
-	fmt.Println("                  XCOSH NODE UPTIME INFO                      ")
+	fmt.Println("                  XCOSH NODE UPTIME INFO                 ")
 	fmt.Println("================================================================")
 	fmt.Printf(" Uptime: %s\n", uptimeFormatted)
 	fmt.Println("================================================================")
@@ -363,7 +386,7 @@ func HandleGetBlock(targetHash string) {
 		return
 	}
 	fmt.Println("================================================================")
-	fmt.Println("                 XCOSH BLOCK JSON DATA                        ")
+	fmt.Println("                 XCOSH BLOCK JSON DATA                          ")
 	fmt.Println("================================================================")
 	fmt.Println(string(jsonData))
 	fmt.Println("================================================================")
