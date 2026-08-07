@@ -17,7 +17,7 @@ import (
 
 // ValidateBlockConsensus rigorously evaluates incoming block structures against 
 // immutable cryptographic consensus parameters. 
-// Enforces strict Bitcoin-grade protocol compliance: rejects any unauthorized 
+// Enforces strict protocol compliance: rejects any unauthorized 
 // reward manipulation, max supply breaches, halving interval mismatches, block size limit breaches, invalid proof-of-work proofs, or malformed address prefixes.
 func ValidateBlockConsensus(block *LedgerBlock, prevBlock *LedgerBlock, currentTotalSupply uint64) error {
 	// 1. Validate sequential block height index progression and chronological integrity.
@@ -41,7 +41,7 @@ func ValidateBlockConsensus(block *LedgerBlock, prevBlock *LedgerBlock, currentT
 		}
 	}
 
-	// 2. Enforce strict Bitcoin-grade Address Prefix validation (Consensus Integrity)
+	// 2. Enforce strict Address Prefix validation (Consensus Integrity)
 	// Ensure the miner uses a valid address prefix matching the core consensus specification.
 	// Bypassed exclusively for the initial genesis block ("SYSTEM_GENESIS").
 	if block.Index > 0 && block.Miner != "SYSTEM_GENESIS" {
