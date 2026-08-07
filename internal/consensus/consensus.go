@@ -34,7 +34,7 @@ const (
 	BlockReward       uint64 = 50 * CoinUnit         // Initial Minting Reward: 50 Units per Block
 	HalvingInterval   uint64 = 7850000               // Strict Halving Block Interval
 	DefaultPort       int    = 19333                 // Default P2P Network Port
-	AddressPrefix     string = "xcosh"                // Immutable Wallet Address Prefix
+	AddressPrefix     string = "xcosh"               // Immutable Wallet Address Prefix
 	GenesisBits       uint32 = 0x1e0ffff0            // Compact difficulty bits representation
 	MaxBlockSizeBytes uint64 = 4 * 1024 * 1024       // Maximum Block Size Limit (4 MB for Dilithium-3 transactions)
 
@@ -44,7 +44,7 @@ const (
 	TargetBlockTimeSec  int64 = PowTargetSpacing   
 
 	// ExpectedGenesisHash stores the immutable cryptographic hash checkpoint.
-	// Jika MaxSupply atau BlockReward diubah, hash ini wajib disesuaikan atau node akan menolak rantai.
+	// If MaxSupply or BlockReward is modified, this hash must be adjusted accordingly or the node will reject the chain.
 	ExpectedGenesisHash string = "00000cac47528e27627a256f5ba877e4768d22417fd873532ffdea8d0c7be77a"
 )
 
@@ -142,7 +142,7 @@ func ValidatePoW(blockHashHex string, difficultyBits uint64) bool {
 
 // ComputeHeaderHash calculates the cryptographic Keccak-256 hash representation, now bound tightly with macroeconomic parameters.
 func ComputeHeaderHash(prevHash string, merkleRoot string, timestamp int64, nonce uint64, message string) string {
-	// Mengikat MaxSupply dan BlockReward langsung ke dalam payload hash header agar setiap perubahan ekonomi memicu hard fork mutlak ala Bitcoin!
+	// Bind MaxSupply and BlockReward directly into the header hash payload so that any macroeconomic modification strictly enforces a Bitcoin-style absolute hard fork!
 	record := bytes.Join([][]byte{
 		[]byte(prevHash),
 		[]byte(merkleRoot),
