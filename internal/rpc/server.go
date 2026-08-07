@@ -25,7 +25,9 @@ import (
 	"reflect"
 	"time"
 
+	"xcosh/core"
 	"xcosh/internal"
+	"xcosh/internal/cli"
 	"xcosh/internal/p2p"
 	"xcosh/node"
 	"xcosh/storage/wallet"
@@ -48,13 +50,10 @@ type RPCResponse struct {
 
 // StartRPCServer starts the JSON-RPC HTTP server with Basic Authentication on the specified port.
 func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
-	// INITIALIZATION OF NEW HTTP SERVE MUX INSTANCE FOR ROUTING PURPOSES
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Validate HTTP Basic Authentication credentials against configuration settings using constant-time comparison.
 		user, pass, ok := r.BasicAuth()
-		// EVALUATION OF CREDENTIAL VALIDITY UTILIZING CONSTANT TIME COMPARISON ALGORITHM FOR SECURITY ENFORCEMENT
 		if !ok || cfg == nil || 
 			subtle.ConstantTimeCompare([]byte(user), []byte(cfg.RPCUser)) != 1 || 
 			subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.RPCPassword)) != 1 {
@@ -63,7 +62,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			return
 		}
 
-		// ENFORCE THAT INCOMING HTTP REQUEST METHOD MUST STRICTLY BE POST
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -71,7 +69,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 
 		var req RPCRequest
 		decoder := json.NewDecoder(r.Body)
-		// DECODE INCOMING JSON PAYLOAD INTO THE RPC REQUEST STRUCTURE INSTANCE
 		if err := decoder.Decode(&req); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
@@ -80,16 +77,13 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 		w.Header().Set("Content-Type", "application/json")
 		response := RPCResponse{ID: req.ID}
 
-		// REFLECTION UTILITY EXTRACTION OF LEDGER OBJECT VALUE AND TYPE INFORMATION
 		v := reflect.ValueOf(ledger)
 		if v.Kind() == reflect.Ptr {
 			v = v.Elem()
 		}
 
-		// SWITCH STATEMENT EVALUATING THE REQUESTED RPC METHOD STRING IDENTIFIER
 		switch req.Method {
 		case "getblockcount":
-			// Retrieve the total number of blocks dynamically from the blockchain ledger chain.
 			count := 0
 			if v.IsValid() && v.Kind() == reflect.Struct {
 				chainField := v.FieldByName("Chain")
@@ -100,11 +94,9 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			response.Result = count
 
 		case "getconnectioncount":
-			// Return the active peer connection count.
 			response.Result = 1
 
 		case "getbestblockhash":
-			// Retrieve the hash of the latest block in the chain dynamically.
 			bestHash := ""
 			if v.IsValid() && v.Kind() == reflect.Struct {
 				chainField := v.FieldByName("Chain")
@@ -122,7 +114,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			response.Result = bestHash
 
 		case "getmininginfo":
-			// Retrieve real-time mining and difficulty metrics safely.
 			blocks := 0
 			difficulty := 0.0
 			if v.IsValid() && v.Kind() == reflect.Struct {
@@ -158,7 +149,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			}
 
 		case "getinfo":
-			// Gather comprehensive real-time node metrics mimicking Core getinfo output.
 			blocks := 0
 			difficulty := 0.0
 
@@ -173,7 +163,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 							latestBlock = latestBlock.Elem()
 						}
 						
-						// Safely extract real-time difficulty supporting any numeric type.
 						diffField := latestBlock.FieldByName("Difficulty")
 						if diffField.IsValid() {
 							switch diffField.Kind() {
@@ -189,7 +178,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 				}
 			}
 
-			// Calculate the total account balance dynamically from the local wallet storage.
 			totalBalance := 0.0
 			walletPath := filepathJoinWallet(cfg)
 			if wf, err := wallet.LoadWalletCustom(walletPath); err == nil && wf != nil {
@@ -212,7 +200,6 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 				}
 			}
 
-			// Construct the final JSON response payload containing system and network statistics.
 			response.Result = map[string]interface{}{
 				"version":         1010000,
 				"protocolversion": 70015,
@@ -231,8 +218,50 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 				"errors":          "",
 			}
 
+		case "generate":
+			blocksCount := 1
+			targetAddr := "SYSTEM_MINER"
+
+			if len(req.Params) > 0 {
+				if bc, ok := req.Params[0].(float64); ok {
+					blocksCount = int(bc)
+				}
+			}
+			if len(req.Params) > 1 {
+				if ta, ok := req.Params[1].(string); ok && ta != "" {
+					targetAddr = ta
+				}
+			}
+
+			if l, ok := ledger.(*node.Ledger); ok {
+				l.Mu.Lock()
+				diskMempool := cli.LoadMempoolFromDisk()
+				if len(diskMempool) > 0 {
+					l.Mempool = diskMempool
+				}
+				l.Mu.Unlock()
+
+				minedHashes := []string{}
+				for i := 0; i < blocksCount; i++ {
+					l.MineBlock()
+					minedHashes = append(minedHashes, "Block mined successfully")
+				}
+				cli.SaveMempoolToDisk([]*core.Transfer{})
+
+				response.Result = map[string]interface{}{
+					"status":  "success",
+					"mined":   blocksCount,
+					"target":  targetAddr,
+					"details": minedHashes,
+				}
+			} else {
+				response.Error = map[string]interface{}{
+					"code":    -32603,
+					"message": "Internal error: invalid ledger type",
+				}
+			}
+
 		case "addnode":
-			// Handle manual peer registration and persistence via RPC
 			if len(req.Params) > 0 {
 				if peerAddr, ok := req.Params[0].(string); ok {
 					home, err := os.UserHomeDir()
@@ -264,29 +293,24 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 			}
 
 		case "stop":
-			// Gracefully stop the RPC server and node daemon.
 			response.Result = "Xcosh server stopping..."
-			// EXECUTE ASYNCHRONOUS SHUTDOWN PROCEDURE AFTER A DELAY INTERVAL
 			go func() {
 				time.Sleep(1 * time.Second)
 				os.Exit(0)
 			}()
 
 		default:
-			// Handle unknown or unsupported RPC method calls.
 			response.Error = map[string]interface{}{
 				"code":    -32601,
 				"message": "Method not found",
 			}
 		}
 
-		// ENCODE AND WRITE RESPONSE STRUCT DIRECTLY TO HTTP RESPONSE WRITER STREAM
 		json.NewEncoder(w).Encode(response)
 	})
 
 	addr := fmt.Sprintf(":%s", rpcPort)
 	fmt.Printf("[RPC] JSON-RPC server listening (Auth Enabled) on port %s\n", rpcPort)
-	// SPAWN BACKGROUND LISTENER ROUTINE FOR HTTP SERVER OPERATION
 	go func() {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			fmt.Printf("[RPC] Server error: %v\n", err)
@@ -294,13 +318,10 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 	}()
 }
 
-// filepathJoinWallet constructs and returns the absolute file path for the local wallet data file.
 func filepathJoinWallet(cfg *internal.Config) string {
-	// RETRIEVAL OF USER HOME DIRECTORY PATH STRING FOR WALLET FILE LOCATION RESOLUTION
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "wallet.dat"
 	}
-	// CONSTRUCTION OF FULL FILE PATH STRING COMBINING HOME DIRECTORY WITH WALLET SUBPATH
 	return home + "/.xcosh/wallet.dat"
 }
