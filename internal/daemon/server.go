@@ -26,37 +26,28 @@ import (
 // RunNodeDaemon initiates the continuous background validation daemon process,
 // acting as the primary P2P node runner.
 func RunNodeDaemon(port string, connectPeer string) {
-	// IT IS HEREBY NOTED THAT THE SYSTEM SHALL OUTPUT A CONSOLE NOTIFICATION REGARDING DAEMON INITIALIZATION
 	fmt.Println("[SYS] Booting Xcosh Live Node Daemon...")
 	
-	// Record the system startup timestamp for precise uptime tracking functionality.
 	internal.RecordStartTime()
 
-	// Load the default validator miner wallet credentials from wallet.dat for block reward distribution.
 	wf, err := wallet.LoadWallet()
 	var addrMiner string
-	// EVALUATION OF WALLET LOADING STATUS AND ACCOUNT AVAILABILITY IS HEREBY EXECUTED
 	if err != nil || wf == nil || len(wf.Accounts) == 0 {
 		addrMiner = "SYSTEM_MINER"
 	} else {
-		// EXTRACTION OF THE PRIMARY ACCOUNT ADDRESS FROM THE LOADED WALLET STRUCTURE
 		addrMiner = wf.Accounts[0].Address
 	}
 
-	// Initialize database storage directory and state ledger contexts.
 	dataDir := cli.GetDataDir()
 
-	// Load configuration settings from xcosh.conf if available.
 	cfg, err := internal.LoadConfig(dataDir)
 	rpcPort := "19332"
-	// CONDITIONAL VERIFICATION OF CONFIGURATION LOADING SUCCESS OR FAILURE
 	if err != nil || cfg == nil {
 		fmt.Println("[SYS] Warning: Failed to load configuration settings, using default RPC port 19332.")
 	} else if cfg.RPCPort != "" {
 		rpcPort = cfg.RPCPort
 	}
 
-	// Override port with configuration file setting safely and ensure correct address format.
 	serverPort := port
 	if cfg != nil && cfg.Port != "" {
 		if cfg.Port[0] != ':' {
@@ -66,91 +57,23 @@ func RunNodeDaemon(port string, connectPeer string) {
 		}
 	}
 
-	// INITIALIZATION OF THE LEDGER STRUCT WITH SPECIFIED DATA DIRECTORY AND MINER ADDRESS
 	ledger := node.InitializeLedger(dataDir, 3, addrMiner)
-	// CREATION OF A NEW P2P SERVER INSTANCE BOUND TO THE DESIGNATED PORT STRING
 	server := p2p.NewServer(serverPort)
 
 	// Start the JSON-RPC server with authentication using settings from xcosh.conf.
 	rpc.StartRPCServer(rpcPort, ledger, cfg)
 
-	// Daftarkan handler RPC khusus untuk perintah CLI (generate / mining & addnode)
-	rpc.RegisterCommandHandler("generate", func(params []interface{}) (interface{}, error) {
-		blocksCount := 1
-		targetAddr := addrMiner
-
-		if len(params) > 0 {
-			if bc, ok := params[0].(float64); ok {
-				blocksCount = int(bc)
-			}
-		}
-		if len(params) > 1 {
-			if ta, ok := params[1].(string); ok && ta != "" {
-				targetAddr = ta
-			}
-		}
-
-		fmt.Printf("[RPC-MINER] Triggering manual mining of %d block(s) to address: %s\n", blocksCount, targetAddr)
-		
-		ledger.Mu.Lock()
-		diskMempool := cli.LoadMempoolFromDisk()
-		if len(diskMempool) > 0 {
-			ledger.Mempool = diskMempool
-		}
-		ledger.Mu.Unlock()
-
-		minedHashes := []string{}
-		for i := 0; i < blocksCount; i++ {
-			block := ledger.MineBlock()
-			if block != nil {
-				minedHashes = append(minedHashes, fmt.Sprintf("Block #%d mined successfully", block.Index))
-			}
-		}
-		cli.SaveMempoolToDisk([]*core.Transfer{})
-
-		return map[string]interface{}{
-			"status": "success",
-			"mined":  blocksCount,
-			"target": targetAddr,
-			"details": minedHashes,
-		}, nil
-	})
-
-	rpc.RegisterCommandHandler("addnode", func(params []interface{}) (interface{}, error) {
-		if len(params) == 0 {
-			return nil, fmt.Errorf("peer address required")
-		}
-		peerAddr, ok := params[0].(string)
-		if !ok || peerAddr == "" {
-			return nil, fmt.Errorf("invalid peer address parameter")
-		}
-
-		fmt.Printf("[RPC-P2P] Connecting to manual peer via daemon: %s\n", peerAddr)
-		go server.ConnectToPeer(peerAddr)
-
-		return map[string]interface{}{
-			"status": "connected",
-			"peer":   peerAddr,
-		}, nil
-	})
-
-	// Initialize the block reorganization manager.
 	reorgManager := internal.NewBlockReorgManager()
 
-	// Register NetTotals HTTP endpoint handler on the P2P server HTTP multiplexer.
 	internal.RegisterNetTotalsHandler(server.Mux())
 
-	// Spawn a background worker routine to periodically dump connected peer information 
-	// and addrman discovered network addresses to external JSON storage files.
 	go func() {
 		for {
-			// ENFORCE A TIME DELAY OF TWO SECONDS BETWEEN ITERATIONS OF PEER DATA DUMPING
 			time.Sleep(2 * time.Second)
 			peerList := server.GetPeerList()
 			data, _ := json.MarshalIndent(peerList, "", "  ")
 			os.WriteFile(filepath.Join(dataDir, "peers.json"), data, 0644)
 			
-			// Persist known peer addresses managed by AddrManager for inspection.
 			if server.AddrManager != nil {
 				knownAddrs := server.AddrManager.GetKnownAddresses()
 				addrData, _ := json.MarshalIndent(knownAddrs, "", "  ")
@@ -159,66 +82,52 @@ func RunNodeDaemon(port string, connectPeer string) {
 		}
 	}()
 
-	// Define the network transaction reception callback handler for incoming P2P messages.
 	onTx := func(tx *core.Transfer) {
 		fmt.Println("[P2P] Received transaction from network peer, adding to mempool...")
-		// ACQUIRE MUTEX LOCK PRIOR TO MODIFYING MEMPOOL SLICE REFERENCES
 		ledger.Mu.Lock()
 		ledger.Mempool = append(ledger.Mempool, tx)
-		// RELEASE MUTEX LOCK AFTER MODIFICATION IS COMPLETED
 		ledger.Mu.Unlock()
 		
-		// Synchronize the incoming transaction directly to persistent disk mempool storage.
 		diskMempool := cli.LoadMempoolFromDisk()
 		diskMempool = append(diskMempool, tx)
 		cli.SaveMempoolToDisk(diskMempool)
 	}
 
-	// Define the network block reception callback handler for incoming P2P blocks with Reorg capability.
 	onBlock := func(block *core.LedgerBlock) {
 		fmt.Printf("[P2P] Received new block #%d from network peer!\n", block.Index)
 
-		// ACQUIRE LEDGER MUTEX LOCK FOR THREAD-SAFE BLOCK PROCESSING OPERATIONS
 		ledger.Mu.Lock()
 		defer ledger.Mu.Unlock()
 
-		// Retrieve the current latest chain tip from the ledger storage state.
 		currentTip := ledger.GetLatestBlock()
 		if currentTip == nil {
 			fmt.Println("[P2P REJECTION] Current chain tip is unavailable.")
 			return
 		}
 
-		// Verify strict consensus rules and historical checkpoint boundaries for the incoming block transition.
 		if err := consensus.VerifyBlockReorgTransition(block.Index, block.Hash, string(block.PrevHash), uint64(currentTip.Index)); err != nil {
 			fmt.Printf("[P2P REJECTION] Block reorg transition rejected: %v\n", err)
 			return
 		}
 
-		// Evaluate and handle chain reorganization or direct append through the ReorgManager.
 		if err := reorgManager.HandleReorg(block, currentTip); err != nil {
 			fmt.Printf("[P2P] Failed to process block reorganization: %v\n", err)
 		}
 	}
 
-	// Start the P2P networking listener server asynchronously in the background.
 	go func() {
 		if err := server.StartListening(onBlock, onTx); err != nil {
 			fmt.Printf("[P2P] Server error: %v\n", err)
 		}
 	}()
 
-	// Automatically discover and connect to network peers via configured seeds and the addrman database.
 	server.AutoDiscoverAndConnect(connectPeer)
 
-	// Launch a continuous Proof-of-Work mining loop daemon to process pending transactions from the local mempool.
 	go func() {
 		for {
-			// ENFORCE A THREE SECOND SLEEP DURATION BEFORE CHECKING MEMPOOL FOR PENDING TRANSACTIONS
 			time.Sleep(3 * time.Second)
 			diskMempool := cli.LoadMempoolFromDisk()
 			if len(diskMempool) > 0 {
-				// ACQUIRE LEDGER MUTEX LOCK TO SAFELY ASSIGN DISK MEMPOOL TO RUNTIME MEMPOOL
 				ledger.Mu.Lock()
 				ledger.Mempool = diskMempool
 				ledger.Mu.Unlock()
@@ -230,11 +139,9 @@ func RunNodeDaemon(port string, connectPeer string) {
 		}
 	}()
 
-	// Output operational node status parameters to standard output.
 	fmt.Printf("[NODE] Active validator miner: %s\n", addrMiner)
 	fmt.Printf("[NODE] P2P Server listening on %s\n", serverPort)
 	fmt.Println("[NODE] Node operational and listening. Press Ctrl+C to terminate.")
 	
-	// Block the main execution thread indefinitely to maintain the live daemon process.
 	select {}
 }
