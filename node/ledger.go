@@ -32,7 +32,7 @@ import (
 const (
 	genesisTimestamp    int64  = 1770249600
 	genesisBits         uint32 = 504365040
-	pszTimestamp               = "anjayyy"
+	pszTimestamp               = "IND Today 05/Aug/2026 AldianOkto, While banks keep printing Debt, We build an honest Exit"
 )
 
 // AccountState represents the account balance and transaction sequence nonce.
