@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"net"
 	"xcosh/internal/p2p"
 )
@@ -29,7 +28,6 @@ func NewSyncEngine(listenPort string) (*SyncEngine, error) {
 		EnableMsgEvents: true,
 	}
 
-	// Menginisialisasi P2PServer secara langsung menggunakan konfigurasi struct
 	srv := &p2p.P2PServer{
 		P2PConfig: config,
 	}
