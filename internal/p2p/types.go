@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// Menyesuaikan dengan standar Dilithium3
 type DilithiumPublicKey [1952]byte
 type DilithiumPrivateKey [4016]byte
 
@@ -168,7 +167,8 @@ var (
 )
 
 type Peer struct {
-	rw *conn
+	rw     *conn
+	events *EventFeed
 }
 func newPeer(log Logger, c *conn, protos []Protocol) *Peer { return &Peer{rw: c} }
 func (p *Peer) ID() NodeID { return NodeID{} }
