@@ -15,26 +15,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const (
-	defaultDialTimeout = 15 * time.Second
-
-	discmixTimeout = 5 * time.Second
-
-	defaultMaxPendingPeers = 50
-	defaultDialRatio       = 3
-
-	inboundThrottleTime = 30 * time.Second
-
-	frameReadTimeout  = 30 * time.Second
-	frameWriteTimeout = 20 * time.Second
-)
-
-var (
-	errServerStopped       = errors.New("server stopped")
-	errEncHandshakeError   = errors.New("rlpx enc error")
-	errProtoHandshakeError = errors.New("rlpx proto error")
-)
-
 // Config menampung opsi Server.
 type Config struct {
 	PrivateKey *ecdsa.PrivateKey `toml:"-"`
@@ -950,7 +930,6 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 
 func (srv *Server) setupPortMapping() {
 	srv.portMappingRegister = make(chan *portMapping, 10)
-	// Implementasi port mapping opsional jika menggunakan NAT
 }
 
 type portMapping struct {
