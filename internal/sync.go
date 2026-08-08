@@ -14,9 +14,7 @@ type SyncEngine struct {
 
 // NewSyncEngine menginisialisasi instance SyncEngine baru dengan standar Dilithium3.
 func NewSyncEngine(listenPort string) (*SyncEngine, error) {
-	// Generate atau gunakan key pair Dilithium default untuk node identity
 	var privKey p2p.DilithiumPrivateKey
-	// Inisialisasi dummy/default key untuk bootstrap
 	for i := range privKey {
 		privKey[i] = byte(i % 256)
 	}
@@ -31,9 +29,9 @@ func NewSyncEngine(listenPort string) (*SyncEngine, error) {
 		EnableMsgEvents: true,
 	}
 
-	srv := p2p.NewServer(config)
-	if srv == nil {
-		return nil, fmt.Errorf("gagal membuat server P2P")
+	// Menginisialisasi P2PServer secara langsung menggunakan konfigurasi struct
+	srv := &p2p.P2PServer{
+		P2PConfig: config,
 	}
 
 	return &SyncEngine{
