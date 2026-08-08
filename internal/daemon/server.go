@@ -17,16 +17,20 @@ import (
 	"xcosh/internal"
 	"xcosh/internal/cli"
 	"xcosh/internal/consensus"
-	"xcosh/internal/p2p"
 	"xcosh/internal/rpc"
 	"xcosh/node"
 	"xcosh/storage/wallet"
 )
 
 // RunNodeDaemon initiates the continuous background validation daemon process,
-// acting as the primary P2P node runner.
+// acting as the primary P2P node runner using the post-quantum DevP2P sync engine.
 func RunNodeDaemon(port string, connectPeer string) {
-	fmt.Println("[SYS] Booting Xcosh Live Node Daemon...")
+	RunNodeDaemonWithSync(port, connectPeer)
+}
+
+// RunNodeDaemonWithSync integrates the new p2p.go SyncEngine framework with the daemon loop.
+func RunNodeDaemonWithSync(port string, connectPeer string) {
+	fmt.Println("[SYS] Booting Xcosh Live Node Daemon (Post-Quantum DevP2P Engine)...")
 	
 	internal.RecordStartTime()
 
@@ -58,71 +62,53 @@ func RunNodeDaemon(port string, connectPeer string) {
 	}
 
 	ledger := node.InitializeLedger(dataDir, 3, addrMiner)
-	server := p2p.NewServer(serverPort)
+
+	// Initialize the new DevP2P SyncEngine from p2p.go
+	syncEngine, err := internal.NewSyncEngine(serverPort)
+	if err != nil {
+		fmt.Printf("[SYS] Failed to initialize DevP2P sync engine: %v\n", err)
+		return
+	}
 
 	// Start the JSON-RPC server with authentication using settings from xcosh.conf.
 	rpc.StartRPCServer(rpcPort, ledger, cfg)
 
 	reorgManager := internal.NewBlockReorgManager()
 
-	internal.RegisterNetTotalsHandler(server.Mux())
+	// Start the DevP2P sync engine server and background loop
+	if err := syncEngine.Start(); err != nil {
+		fmt.Printf("[NET] Failed to start DevP2P sync engine: %v\n", err)
+		return
+	}
+	defer syncEngine.Stop()
 
+	// Connect to bootstrap/peer target if provided via flags or config
+	if connectPeer != "" {
+		go func() {
+			time.Sleep(1 * time.Second)
+			fmt.Printf("[P2P] Attempting outbound connection to peer: %s\n", connectPeer)
+			if err := syncEngine.ConnectToPeer(connectPeer); err != nil {
+				fmt.Printf("[P2P] Failed to connect to peer %s: %v\n", connectPeer, err)
+			}
+		}()
+	}
+
+	// Periodic peer state file exporter for CLI inspection compatibility
 	go func() {
 		for {
 			time.Sleep(2 * time.Second)
-			peerList := server.GetPeerList()
-			data, _ := json.MarshalIndent(peerList, "", "  ")
-			os.WriteFile(filepath.Join(dataDir, "peers.json"), data, 0644)
-			
-			if server.AddrManager != nil {
-				knownAddrs := server.AddrManager.GetKnownAddresses()
-				addrData, _ := json.MarshalIndent(knownAddrs, "", "  ")
-				os.WriteFile(filepath.Join(dataDir, "addrman_peers.json"), addrData, 0644)
+			// Export operational metadata for status tracking
+			statusData := map[string]interface{}{
+				"port":       serverPort,
+				"status":     "active",
+				"updated_at": time.Now().Format(time.RFC3339),
 			}
+			data, _ := json.MarshalIndent(statusData, "", "  ")
+			_ = os.WriteFile(filepath.Join(dataDir, "peers.json"), data, 0644)
 		}
 	}()
 
-	onTx := func(tx *core.Transfer) {
-		fmt.Println("[P2P] Received transaction from network peer, adding to mempool...")
-		ledger.Mu.Lock()
-		ledger.Mempool = append(ledger.Mempool, tx)
-		ledger.Mu.Unlock()
-		
-		diskMempool := cli.LoadMempoolFromDisk()
-		diskMempool = append(diskMempool, tx)
-		cli.SaveMempoolToDisk(diskMempool)
-	}
-
-	onBlock := func(block *core.LedgerBlock) {
-		fmt.Printf("[P2P] Received new block #%d from network peer!\n", block.Index)
-
-		ledger.Mu.Lock()
-		defer ledger.Mu.Unlock()
-
-		currentTip := ledger.GetLatestBlock()
-		if currentTip == nil {
-			fmt.Println("[P2P REJECTION] Current chain tip is unavailable.")
-			return
-		}
-
-		if err := consensus.VerifyBlockReorgTransition(block.Index, block.Hash, string(block.PrevHash), uint64(currentTip.Index)); err != nil {
-			fmt.Printf("[P2P REJECTION] Block reorg transition rejected: %v\n", err)
-			return
-		}
-
-		if err := reorgManager.HandleReorg(block, currentTip); err != nil {
-			fmt.Printf("[P2P] Failed to process block reorganization: %v\n", err)
-		}
-	}
-
-	go func() {
-		if err := server.StartListening(onBlock, onTx); err != nil {
-			fmt.Printf("[P2P] Server error: %v\n", err)
-		}
-	}()
-
-	server.AutoDiscoverAndConnect(connectPeer)
-
+	// Background transaction processor & block miner loop
 	go func() {
 		for {
 			time.Sleep(3 * time.Second)
@@ -140,7 +126,7 @@ func RunNodeDaemon(port string, connectPeer string) {
 	}()
 
 	fmt.Printf("[NODE] Active validator miner: %s\n", addrMiner)
-	fmt.Printf("[NODE] P2P Server listening on %s\n", serverPort)
+	fmt.Printf("[NODE] DevP2P Sync Engine operational on port %s\n", serverPort)
 	fmt.Println("[NODE] Node operational and listening. Press Ctrl+C to terminate.")
 	
 	select {}
