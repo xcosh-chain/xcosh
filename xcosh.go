@@ -96,7 +96,7 @@ func main() {
 		cli.HandleSendTx(*sendRecipient, amountInUnits, *sendFee, *sendSenderAddr)
 	case "node":
 		nodeCmd.Parse(os.Args[2:])
-		daemon.RunNodeDaemon(*nodePort, *nodeConnect)
+		daemon.RunNodeDaemonWithSync(*nodePort, *nodeConnect)
 	case "explorer":
 		explorerCmd.Parse(os.Args[2:])
 		cli.HandleExploreBlockchain()
