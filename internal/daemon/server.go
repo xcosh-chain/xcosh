@@ -16,7 +16,7 @@ import (
 	"xcosh/core"
 	"xcosh/internal"
 	"xcosh/internal/cli"
-	"xcosh/internal/consensus"
+	_ "xcosh/internal/consensus"
 	"xcosh/internal/rpc"
 	"xcosh/node"
 	"xcosh/storage/wallet"
