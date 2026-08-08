@@ -29,11 +29,8 @@ var (
 	errProtoHandshakeError = errors.New("p2p proto error")
 )
 
-// DilithiumPublicKey merepresentasikan public key Dilithium3
-type DilithiumPublicKey [1952]byte // Ukuran standar public key Dilithium3
-
-// DilithiumPrivateKey merepresentasikan private key Dilithium3
-type DilithiumPrivateKey [4016]byte // Ukuran standar private key Dilithium3
+type DilithiumPublicKey [1952]byte
+type DilithiumPrivateKey [4016]byte
 
 type P2PConfig struct {
 	PrivateKey       *DilithiumPrivateKey `toml:"-"`
@@ -260,11 +257,11 @@ func (srv *P2PServer) Self() *Node {
 	return ln.Node()
 }
 
-func (srv *P2PServer) DiscoveryV4() *UDPv4 {
+func (srv *P2PServer) GetDiscoveryV4() *UDPv4 {
 	return srv.discv4
 }
 
-func (srv *P2PServer) DiscoveryV5() *UDPv5 {
+func (srv *P2PServer) GetDiscoveryV5() *UDPv5 {
 	return srv.discv5
 }
 
@@ -362,7 +359,6 @@ func (srv *P2PServer) Start() (err error) {
 }
 
 func (srv *P2PServer) setupLocalNode() error {
-	// Menggunakan representasi pubkey Dilithium3
 	var pubkeyBytes [32]byte 
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkeyBytes[:]}
 	for _, p := range srv.Protocols {
@@ -765,7 +761,6 @@ func (srv *P2PServer) setupConn(c *conn, dialDest *Node) error {
 		return fmt.Errorf("%w: %v", errProtoHandshakeError, err)
 	}
 	
-	// Menggunakan fungsi Keccak (SHA-3) untuk pencocokan ID node
 	hashID := Keccak256(phs.ID)
 	if id := c.node.ID(); !bytes.Equal(hashID[:], id[:]) {
 		return DiscUnexpectedIdentity
@@ -786,9 +781,7 @@ func nodeFromConn(pubkey *DilithiumPublicKey, conn net.Conn) *Node {
 		ip = tcp.IP
 		port = tcp.Port
 	}
-	// Menggunakan stub/konversi public key Dilithium ke node
-	var dummyPub ecdsa.PublicKey
-	return NewNodeV4(&dummyPub, ip, port, port)
+	return NewNodeV4(pubkey, ip, port, port)
 }
 
 func (srv *P2PServer) checkpoint(c *conn, stage chan<- *conn) error {
@@ -831,33 +824,4 @@ func (srv *P2PServer) runPeer(p *Peer) {
 		RemoteAddress: p.RemoteAddr().String(),
 		LocalAddress:  p.LocalAddr().String(),
 	})
-}
-
-type NodeInfo struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Enode  string `json:"enode"`
-	ENR    string `json:"enr"`
-	IP     string `json:"ip"`
-	Ports  struct {
-		Discovery int `json:"discovery"`
-		Listener  int `json:"listener"`
-	} `json:"ports"`
-	ListenAddr string                 `json:"listenAddr"`
-	Protocols  map[string]interface{} `json:"protocols"`
-}
-
-func (srv *P2PServer) NodeInfo() *NodeInfo {
-	node := srv.Self()
-	info := &NodeInfo{
-		Name:       srv.Name,
-		Enode:      node.URLv4(),
-		ID:         node.ID().String(),
-		IP:         node.IPAddr().String(),
-		ListenAddr: srv.ListenAddr,
-	}
-	info.Ports.Discovery = node.UDP()
-	info.Ports.Listener = node.TCP()
-	info.ENR = node.String()
-	return info
 }
