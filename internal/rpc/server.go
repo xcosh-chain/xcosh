@@ -54,8 +54,8 @@ func StartRPCServer(rpcPort string, ledger interface{}, cfg *internal.Config) {
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		user, pass, ok := r.BasicAuth()
-		if !ok || cfg == nil || 
-			subtle.ConstantTimeCompare([]byte(user), []byte(cfg.RPCUser)) != 1 || 
+		if !ok || cfg == nil ||
+			subtle.ConstantTimeCompare([]byte(user), []byte(cfg.RPCUser)) != 1 ||
 			subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.RPCPassword)) != 1 {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Xcosh RPC"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
