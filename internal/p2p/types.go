@@ -1,15 +1,28 @@
 package p2p
 
 import (
-	"crypto/ecdsa"
+	"errors"
 	"net"
 	"net/netip"
 	"time"
 )
 
+// Menyesuaikan dengan standar Dilithium3
+type DilithiumPublicKey [1952]byte
+type DilithiumPrivateKey [4016]byte
+
 type Node struct{}
 func (n *Node) ID() NodeID { return NodeID{} }
-func (n *Node) Pubkey() *ecdsa.PublicKey { return &ecdsa.PublicKey{} }
+func (n *Node) Pubkey() *DilithiumPublicKey { return &DilithiumPublicKey{} }
+func (n *Node) URLv4() string { return "" }
+func (n *Node) IPAddr() net.IP { return net.IP{} }
+func (n *Node) UDP() int { return 0 }
+func (n *Node) TCP() int { return 0 }
+func (n *Node) String() string { return "" }
+
+func NewNodeV4(pubkey *DilithiumPublicKey, ip net.IP, udpPort, tcpPort int) *Node {
+	return &Node{}
+}
 
 type NodeID [32]byte
 func (id NodeID) String() string { return "" }
@@ -24,7 +37,7 @@ type Protocol struct {
 	Run            func(p *Peer, rw MsgReadWriter) error
 	NodeInfo       func() interface{}
 	PeerInfo       func(id NodeID) interface{}
-	DialCandidates iterNode
+	DialCandidates interface{}
 	Attributes     []ENREntry
 }
 
@@ -55,6 +68,7 @@ type ENREntry interface{}
 
 type UDPv4 struct{}
 func (u *UDPv4) Close() {}
+func (u *UDPv4) RandomNodes() interface{} { return nil }
 
 type UDPv5 struct{}
 func (u *UDPv5) Close() {}
@@ -92,7 +106,7 @@ type ReadPacket struct {
 }
 
 type DiscoveryConfig struct {
-	PrivateKey  *ecdsa.PrivateKey
+	PrivateKey  *DilithiumPrivateKey
 	NetRestrict *Netlist
 	Bootnodes   []*Node
 	Unhandled   chan ReadPacket
@@ -104,7 +118,7 @@ func OpenNodeDB(path string) (*NodeDB, error) { return &NodeDB{}, nil }
 func (db *NodeDB) Close() error { return nil }
 
 type LocalNode struct{}
-func NewLocalNode(db *NodeDB, prv *ecdsa.PrivateKey) *LocalNode { return &LocalNode{} }
+func NewLocalNode(db *NodeDB, prv *DilithiumPrivateKey) *LocalNode { return &LocalNode{} }
 func (ln *LocalNode) SetFallbackIP(ip net.IP) {}
 func (ln *LocalNode) SetFallbackUDP(port int) {}
 func (ln *LocalNode) Set(entry ENREntry) {}
@@ -119,7 +133,6 @@ func ListenV5(conn UDPConn, ln *LocalNode, cfg DiscoveryConfig) (*UDPv5, error) 
 	return &UDPv5{}, nil
 }
 
-type iterNode interface{}
 type protoHandshake struct {
 	Version uint
 	Name    string
@@ -130,7 +143,6 @@ type protoHandshake struct {
 const baseProtocolVersion = 1
 
 func SortCaps(caps []Cap) {}
-func FromECDSAPub(pub *ecdsa.PublicKey) []byte { return make([]byte, 65) }
 func RootLogger() Logger { return nil }
 func AddrAddr(addr net.Addr) netip.Addr { return netip.Addr{} }
 func AddrIsLAN(addr netip.Addr) bool { return false }
@@ -155,8 +167,10 @@ var (
 	DiscRequested          = errors.New("requested")
 )
 
-type Peer struct{}
-func newPeer(log Logger, c *conn, protos []Protocol) *Peer { return &Peer{} }
+type Peer struct {
+	rw *conn
+}
+func newPeer(log Logger, c *conn, protos []Protocol) *Peer { return &Peer{rw: c} }
 func (p *Peer) ID() NodeID { return NodeID{} }
 func (p *Peer) RemoteAddr() net.Addr { return nil }
 func (p *Peer) LocalAddr() net.Addr { return nil }
@@ -166,7 +180,7 @@ func (p *Peer) run() (bool, error) { return false, nil }
 
 type MsgReadWriter interface{}
 
-func newRLPX(conn net.Conn, pubkey *ecdsa.PublicKey) transport { return nil }
+func newRLPX(conn net.Conn, pubkey *DilithiumPublicKey) transport { return nil }
 func countMatchingProtocols(protos []Protocol, caps []Cap) int { return 1 }
 func Keccak256(data ...[]byte) [32]byte { return [32]byte{} }
 
