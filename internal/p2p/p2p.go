@@ -11,21 +11,19 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
+	
 )
 
 const (
 	defaultDialTimeout = 15 * time.Second
-
-	discmixTimeout = 5 * time.Second
+	discmixTimeout     = 5 * time.Second
 
 	defaultMaxPendingPeers = 50
 	defaultDialRatio       = 3
 
 	inboundThrottleTime = 30 * time.Second
-
-	frameReadTimeout  = 30 * time.Second
-	frameWriteTimeout = 20 * time.Second
+	frameReadTimeout    = 30 * time.Second
+	frameWriteTimeout   = 20 * time.Second
 )
 
 var (
@@ -35,32 +33,32 @@ var (
 )
 
 type P2PConfig struct {
-	PrivateKey *ecdsa.PrivateKey `toml:"-"`
-	MaxPeers int
-	MaxPendingPeers int `toml:",omitempty"`
-	DialRatio int `toml:",omitempty"`
-	NoDiscovery bool
-	DiscoveryV4 bool `toml:",omitempty"`
-	DiscoveryV5 bool `toml:",omitempty"`
-	Name string `toml:"-"`
-	BootstrapNodes []*enode.Node
+	PrivateKey       *ecdsa.PrivateKey `toml:"-"`
+	MaxPeers         int
+	MaxPendingPeers  int `toml:",omitempty"`
+	DialRatio        int `toml:",omitempty"`
+	NoDiscovery      bool
+	DiscoveryV4      bool `toml:",omitempty"`
+	DiscoveryV5      bool `toml:",omitempty"`
+	Name             string `toml:"-"`
+	BootstrapNodes   []*enode.Node
 	BootstrapNodesV5 []*enode.Node `toml:",omitempty"`
-	StaticNodes []*enode.Node
-	TrustedNodes []*enode.Node
-	NetRestrict *netutil.Netlist `toml:",omitempty"`
-	NodeDatabase string `toml:",omitempty"`
-	Protocols []Protocol `toml:"-" json:"-"`
-	ListenAddr string
-	DiscAddr string
-	NAT nat.Interface `toml:",omitempty"`
-	Dialer NodeDialer `toml:"-"`
-	NoDial bool `toml:",omitempty"`
-	EnableMsgEvents bool
-	Logger log.Logger `toml:",omitempty"`
-	clock mclock.Clock
+	StaticNodes      []*enode.Node
+	TrustedNodes     []*enode.Node
+	NetRestrict      *netutil.Netlist `toml:",omitempty"`
+	NodeDatabase     string `toml:",omitempty"`
+	Protocols        []Protocol `toml:"-" json:"-"`
+	ListenAddr       string
+	DiscAddr         string
+	NAT              nat.Interface `toml:",omitempty"`
+	Dialer           NodeDialer `toml:"-"`
+	NoDial           bool `toml:",omitempty"`
+	EnableMsgEvents  bool
+	Logger           log.Logger `toml:",omitempty"`
+	clock            mclock.Clock
 }
 
-type Server struct {
+type P2PServer struct {
 	P2PConfig
 
 	newTransport func(net.Conn, *ecdsa.PublicKey) transport
@@ -180,11 +178,11 @@ func (c *conn) set(f connFlag, val bool) {
 	}
 }
 
-func (srv *Server) LocalNode() *enode.LocalNode {
+func (srv *P2PServer) LocalNode() *enode.LocalNode {
 	return srv.localnode
 }
 
-func (srv *Server) Peers() []*Peer {
+func (srv *P2PServer) Peers() []*Peer {
 	var ps []*Peer
 	srv.doPeerOp(func(peers map[enode.ID]*Peer) {
 		for _, p := range peers {
@@ -194,7 +192,7 @@ func (srv *Server) Peers() []*Peer {
 	return ps
 }
 
-func (srv *Server) PeerCount() int {
+func (srv *P2PServer) PeerCount() int {
 	var count int
 	srv.doPeerOp(func(ps map[enode.ID]*Peer) {
 		count = len(ps)
@@ -202,11 +200,11 @@ func (srv *Server) PeerCount() int {
 	return count
 }
 
-func (srv *Server) AddPeer(node *enode.Node) {
+func (srv *P2PServer) AddPeer(node *enode.Node) {
 	srv.dialsched.addStatic(node)
 }
 
-func (srv *Server) RemovePeer(node *enode.Node) {
+func (srv *P2PServer) RemovePeer(node *enode.Node) {
 	var (
 		ch  chan *PeerEvent
 		sub event.Subscription
@@ -229,25 +227,25 @@ func (srv *Server) RemovePeer(node *enode.Node) {
 	}
 }
 
-func (srv *Server) AddTrustedPeer(node *enode.Node) {
+func (srv *P2PServer) AddTrustedPeer(node *enode.Node) {
 	select {
 	case srv.addtrusted <- node:
 	case <-srv.quit:
 	}
 }
 
-func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
+func (srv *P2PServer) RemoveTrustedPeer(node *enode.Node) {
 	select {
 	case srv.removetrusted <- node:
 	case <-srv.quit:
 	}
 }
 
-func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
+func (srv *P2PServer) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }
 
-func (srv *Server) Self() *enode.Node {
+func (srv *P2PServer) Self() *enode.Node {
 	srv.lock.Lock()
 	ln := srv.localnode
 	srv.lock.Unlock()
@@ -258,15 +256,15 @@ func (srv *Server) Self() *enode.Node {
 	return ln.Node()
 }
 
-func (srv *Server) DiscoveryV4() *discover.UDPv4 {
+func (srv *P2PServer) DiscoveryV4() *discover.UDPv4 {
 	return srv.discv4
 }
 
-func (srv *Server) DiscoveryV5() *discover.UDPv5 {
+func (srv *P2PServer) DiscoveryV5() *discover.UDPv5 {
 	return srv.discv5
 }
 
-func (srv *Server) Stop() {
+func (srv *P2PServer) Stop() {
 	srv.lock.Lock()
 	if !srv.running {
 		srv.lock.Unlock()
@@ -303,7 +301,7 @@ func (s *sharedUDPConn) Close() error {
 	return nil
 }
 
-func (srv *Server) Start() (err error) {
+func (srv *P2PServer) Start() (err error) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	if srv.running {
@@ -359,7 +357,7 @@ func (srv *Server) Start() (err error) {
 	return nil
 }
 
-func (srv *Server) setupLocalNode() error {
+func (srv *P2PServer) setupLocalNode() error {
 	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
 	for _, p := range srv.Protocols {
@@ -382,7 +380,7 @@ func (srv *Server) setupLocalNode() error {
 	return nil
 }
 
-func (srv *Server) setupDiscovery() error {
+func (srv *P2PServer) setupDiscovery() error {
 	srv.discmix = enode.NewFairMix(discmixTimeout)
 
 	if srv.NoDiscovery {
@@ -440,7 +438,7 @@ func (srv *Server) setupDiscovery() error {
 	return nil
 }
 
-func (srv *Server) setupDialScheduler() {
+func (srv *P2PServer) setupDialScheduler() {
 	config := dialConfig{
 		self:           srv.localnode.ID(),
 		maxDialPeers:   srv.maxDialedConns(),
@@ -462,11 +460,11 @@ func (srv *Server) setupDialScheduler() {
 	}
 }
 
-func (srv *Server) maxInboundConns() int {
+func (srv *P2PServer) maxInboundConns() int {
 	return srv.MaxPeers - srv.maxDialedConns()
 }
 
-func (srv *Server) maxDialedConns() (limit int) {
+func (srv *P2PServer) maxDialedConns() (limit int) {
 	if srv.NoDial || srv.MaxPeers == 0 {
 		return 0
 	}
@@ -481,7 +479,7 @@ func (srv *Server) maxDialedConns() (limit int) {
 	return limit
 }
 
-func (srv *Server) setupListening() error {
+func (srv *P2PServer) setupListening() error {
 	listener, err := srv.listenFunc("tcp", srv.ListenAddr)
 	if err != nil {
 		return err
@@ -506,7 +504,7 @@ func (srv *Server) setupListening() error {
 	return nil
 }
 
-func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
+func (srv *P2PServer) setupUDPListening() (*net.UDPConn, error) {
 	listenAddr := srv.ListenAddr
 	if srv.DiscAddr != "" {
 		listenAddr = srv.DiscAddr
@@ -533,7 +531,7 @@ func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
 	return conn, nil
 }
 
-func (srv *Server) doPeerOp(fn peerOpFunc) {
+func (srv *P2PServer) doPeerOp(fn peerOpFunc) {
 	select {
 	case srv.peerOp <- fn:
 		<-srv.peerOpDone
@@ -541,7 +539,7 @@ func (srv *Server) doPeerOp(fn peerOpFunc) {
 	}
 }
 
-func (srv *Server) run() {
+func (srv *P2PServer) run() {
 	srv.log.Info("Started xcosh P2P networking", "self", srv.localnode.Node().URLv4())
 	defer srv.loopWG.Done()
 	defer srv.nodedb.Close()
@@ -631,7 +629,7 @@ running:
 	}
 }
 
-func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *P2PServer) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
@@ -646,14 +644,14 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 	}
 }
 
-func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *P2PServer) addPeerChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
 	}
 	return srv.postHandshakeChecks(peers, inboundCount, c)
 }
 
-func (srv *Server) listenLoop() {
+func (srv *P2PServer) listenLoop() {
 	tokens := defaultMaxPendingPeers
 	if srv.MaxPendingPeers > 0 {
 		tokens = srv.MaxPendingPeers
@@ -695,7 +693,7 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
+func (srv *P2PServer) checkInboundConn(remoteIP netip.Addr) error {
 	if !remoteIP.IsValid() {
 		return nil
 	}
@@ -711,7 +709,7 @@ func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
 	return nil
 }
 
-func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *P2PServer) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
 	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
 	if dialDest == nil {
 		c.transport = srv.newTransport(fd, nil)
@@ -729,7 +727,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	return err
 }
 
-func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
+func (srv *P2PServer) setupConn(c *conn, dialDest *enode.Node) error {
 	srv.lock.Lock()
 	running := srv.running
 	srv.lock.Unlock()
@@ -784,7 +782,7 @@ func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
 	return enode.NewV4(pubkey, ip, port, port)
 }
 
-func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
+func (srv *P2PServer) checkpoint(c *conn, stage chan<- *conn) error {
 	select {
 	case stage <- c:
 	case <-srv.quit:
@@ -793,7 +791,7 @@ func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
 	return <-c.cont
 }
 
-func (srv *Server) launchPeer(c *conn) *Peer {
+func (srv *P2PServer) launchPeer(c *conn) *Peer {
 	p := newPeer(srv.log, c, srv.Protocols)
 	if srv.EnableMsgEvents {
 		p.events = &srv.peerFeed
@@ -802,7 +800,7 @@ func (srv *Server) launchPeer(c *conn) *Peer {
 	return p
 }
 
-func (srv *Server) runPeer(p *Peer) {
+func (srv *P2PServer) runPeer(p *Peer) {
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
@@ -840,7 +838,7 @@ type NodeInfo struct {
 	Protocols  map[string]interface{} `json:"protocols"`
 }
 
-func (srv *Server) NodeInfo() *NodeInfo {
+func (srv *P2PServer) NodeInfo() *NodeInfo {
 	node := srv.Self()
 	info := &NodeInfo{
 		Name:       srv.Name,
@@ -848,37 +846,9 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		ID:         node.ID().String(),
 		IP:         node.IPAddr().String(),
 		ListenAddr: srv.ListenAddr,
-		Protocols:  make(map[string]interface{}),
 	}
 	info.Ports.Discovery = node.UDP()
 	info.Ports.Listener = node.TCP()
 	info.ENR = node.String()
-
-	for _, proto := range srv.Protocols {
-		if _, ok := info.Protocols[proto.Name]; !ok {
-			nodeInfo := interface{}("unknown")
-			if query := proto.NodeInfo; query != nil {
-				nodeInfo = proto.NodeInfo()
-			}
-			info.Protocols[proto.Name] = nodeInfo
-		}
-	}
 	return info
-}
-
-func (srv *Server) PeersInfo() []*PeerInfo {
-	infos := make([]*PeerInfo, 0, srv.PeerCount())
-	for _, peer := range srv.Peers() {
-		if peer != nil {
-			infos = append(infos, peer.Info())
-		}
-	}
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			if infos[i].ID > infos[j].ID {
-				infos[i], infos[j] = infos[j], infos[i]
-			}
-		}
-	}
-	return infos
 }
