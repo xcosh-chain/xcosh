@@ -1,89 +1,99 @@
-// Copyright (c) 2026 AldianOkto. All rights reserved.
-// Copyright (c) 2026 Xcosh Core.
-// Use of this source code is governed by the Apache License.
-// that can be found in the root directory of this repository.
-// Project: Xcosh / Blockchain Core
-//
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at. <http://www.apache.org/licenses/LICENSE-2.0>
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package internal
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-// Config holds the node configuration parameters loaded from xcosh.conf.
+// Config structure holds the parameter values required for node operation.
 type Config struct {
-	Port        string
-	RPCPort     string
-	RPCUser     string
-	RPCPassword string
+	DataDir      string
+	Port         string
+	RPCPort      string
+	RPCUser      string
+	RPCPassword  string
+	CookieString string
 }
 
-// LoadConfig reads and parses the xcosh.conf configuration file from the specified data directory.
-// It returns a pointer to a Config struct populated with the parsed values, 
-// or falls back to default settings if the configuration file does not exist.
+// LoadConfig reads configuration parameters from the specified data directory.
 func LoadConfig(dataDir string) (*Config, error) {
-	// Initialize default configuration matching standard core behavior
+	// Initialize default configuration values
 	cfg := &Config{
+		DataDir:     dataDir,
 		Port:        ":19333",
 		RPCPort:     "19332",
 		RPCUser:     "",
 		RPCPassword: "",
 	}
 
-	// Construct the full path to the configuration file
-	configPath := filepath.Join(dataDir, "xcosh.conf")
-	file, err := os.Open(configPath)
-	if err != nil {
-		// If the configuration file is missing, return default values safely without returning an error
-		return cfg, nil
+	// Ensure that the target data directory exists with appropriate permissions
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return cfg, err
 	}
-	defer file.Close()
 
-	// Scan the configuration file line by line
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		
-		// Skip empty lines and comment lines starting with '#'
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		// Split the line into key-value pairs separated by '='
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
-
-		// Map configuration keys to their respective struct fields
-		switch key {
-		case "port":
-			if !strings.HasPrefix(val, ":") {
-				cfg.Port = ":" + val
-			} else {
-				cfg.Port = val
+	// Attempt to locate and open the configuration file
+	configPath := filepath.Join(dataDir, "xcosh.conf")
+	if file, err := os.Open(configPath); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			// Ignore empty lines and comment lines
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
 			}
-		case "rpcport":
-			cfg.RPCPort = val
-		case "rpcuser":
-			cfg.RPCUser = val
-		case "rpcpassword":
-			cfg.RPCPassword = val
+
+			// Split configuration line into key and value components
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+
+			// Assign parsed configuration values to corresponding fields
+			switch key {
+			case "port":
+				if !strings.HasPrefix(val, ":") {
+					cfg.Port = ":" + val
+				} else {
+					cfg.Port = val
+				}
+			case "rpcport":
+				cfg.RPCPort = val
+			case "rpcuser":
+				cfg.RPCUser = val
+			case "rpcpassword":
+				cfg.RPCPassword = val
+			}
+		}
+	}
+
+	// Define the path for the authentication cookie file
+	cookiePath := filepath.Join(dataDir, ".cookie")
+	
+	// Generate credentials automatically if user credentials are not provided
+	if cfg.RPCUser == "" && cfg.RPCPassword == "" {
+		if _, err := os.Stat(cookiePath); os.IsNotExist(err) {
+			randomBytes := make([]byte, 32)
+			rand.Read(randomBytes)
+			cookieData := "__cookie__:" + hex.EncodeToString(randomBytes)
+			_ = os.WriteFile(cookiePath, []byte(cookieData), 0600)
+		}
+		
+		// Read authentication credentials from the cookie file
+		if cookieBytes, err := os.ReadFile(cookiePath); err == nil {
+			cfg.CookieString = string(cookieBytes)
+			parts := strings.SplitN(cfg.CookieString, ":", 2)
+			if len(parts) == 2 {
+				cfg.RPCUser = parts[0]
+				cfg.RPCPassword = parts[1]
+			}
 		}
 	}
 
