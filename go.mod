@@ -6,6 +6,7 @@ require (
 	github.com/cloudflare/circl v1.3.7
 	github.com/syndtr/goleveldb v1.0.0
 	golang.org/x/crypto v0.54.0
+	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743
 )
 
 require (
