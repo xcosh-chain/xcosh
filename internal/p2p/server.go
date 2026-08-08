@@ -176,28 +176,6 @@ func (srv *Server) Stop() {
 	srv.loopWG.Wait()
 }
 
-type sharedUDPConn struct {
-	*net.UDPConn
-	unhandled chan ReadPacket
-}
-
-func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
-	packet, ok := <-s.unhandled
-	if !ok {
-		return 0, netip.AddrPort{}, errors.New("connection was closed")
-	}
-	l := len(packet.Data)
-	if l > len(b) {
-		l = len(b)
-	}
-	copy(b[:l], packet.Data[:l])
-	return l, packet.Addr, nil
-}
-
-func (s *sharedUDPConn) Close() error {
-	return nil
-}
-
 // Start memulai server.
 func (srv *Server) Start() (err error) {
 	srv.lock.Lock()
@@ -693,16 +671,6 @@ func (srv *Server) setupConn(c *conn, dialDest *Node) error {
 	}
 
 	return nil
-}
-
-func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *Node {
-	var ip net.IP
-	var port int
-	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
-		ip = tcp.IP
-		port = tcp.Port
-	}
-	return NewV4(pubkey, ip, port, port)
 }
 
 func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
