@@ -29,9 +29,6 @@ var (
 	errProtoHandshakeError = errors.New("p2p proto error")
 )
 
-type DilithiumPublicKey [1952]byte
-type DilithiumPrivateKey [4016]byte
-
 type P2PConfig struct {
 	PrivateKey       *DilithiumPrivateKey `toml:"-"`
 	MaxPeers         int
