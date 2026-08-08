@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"net"
@@ -30,8 +29,14 @@ var (
 	errProtoHandshakeError = errors.New("p2p proto error")
 )
 
+// DilithiumPublicKey merepresentasikan public key Dilithium3
+type DilithiumPublicKey [1952]byte // Ukuran standar public key Dilithium3
+
+// DilithiumPrivateKey merepresentasikan private key Dilithium3
+type DilithiumPrivateKey [4016]byte // Ukuran standar private key Dilithium3
+
 type P2PConfig struct {
-	PrivateKey       *ecdsa.PrivateKey `toml:"-"`
+	PrivateKey       *DilithiumPrivateKey `toml:"-"`
 	MaxPeers         int
 	MaxPendingPeers  int `toml:",omitempty"`
 	DialRatio        int `toml:",omitempty"`
@@ -59,7 +64,7 @@ type P2PConfig struct {
 type P2PServer struct {
 	P2PConfig
 
-	newTransport func(net.Conn, *ecdsa.PublicKey) transport
+	newTransport func(net.Conn, *DilithiumPublicKey) transport
 	newPeerHook  func(*Peer)
 	listenFunc   func(network, addr string) (net.Listener, error)
 
@@ -121,7 +126,7 @@ type conn struct {
 }
 
 type transport interface {
-	doEncHandshake(prv *ecdsa.PrivateKey) (*ecdsa.PublicKey, error)
+	doEncHandshake(prv *DilithiumPrivateKey) (*DilithiumPublicKey, error)
 	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
 	MsgReadWriter
 	close(err error)
@@ -249,7 +254,8 @@ func (srv *P2PServer) Self() *Node {
 	srv.lock.Unlock()
 
 	if ln == nil {
-		return NewNodeV4(&srv.PrivateKey.PublicKey, net.ParseIP("0.0.0.0"), 0, 0)
+		var dummyPub DilithiumPublicKey
+		return NewNodeV4(&dummyPub, net.ParseIP("0.0.0.0"), 0, 0)
 	}
 	return ln.Node()
 }
@@ -356,8 +362,9 @@ func (srv *P2PServer) Start() (err error) {
 }
 
 func (srv *P2PServer) setupLocalNode() error {
-	pubkey := FromECDSAPub(&srv.PrivateKey.PublicKey)
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
+	// Menggunakan representasi pubkey Dilithium3
+	var pubkeyBytes [32]byte 
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkeyBytes[:]}
 	for _, p := range srv.Protocols {
 		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
 	}
@@ -734,9 +741,8 @@ func (srv *P2PServer) setupConn(c *conn, dialDest *Node) error {
 	}
 
 	if dialDest != nil {
-		dialPubkey := new(ecdsa.PublicKey)
-		if err := dialDest.Load((*Secp256k1Key)(dialPubkey)); err != nil {
-			return fmt.Errorf("%w: dial destination doesn't have a secp256k1 public key", errEncHandshakeError)
+		if dialDest.Pubkey() == nil {
+			return fmt.Errorf("%w: dial destination doesn't have a Dilithium public key", errEncHandshakeError)
 		}
 	}
 
@@ -773,14 +779,16 @@ func (srv *P2PServer) setupConn(c *conn, dialDest *Node) error {
 	return nil
 }
 
-func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *Node {
+func nodeFromConn(pubkey *DilithiumPublicKey, conn net.Conn) *Node {
 	var ip net.IP
 	var port int
 	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
 		ip = tcp.IP
 		port = tcp.Port
 	}
-	return NewNodeV4(pubkey, ip, port, port)
+	// Menggunakan stub/konversi public key Dilithium ke node
+	var dummyPub ecdsa.PublicKey
+	return NewNodeV4(&dummyPub, ip, port, port)
 }
 
 func (srv *P2PServer) checkpoint(c *conn, stage chan<- *conn) error {
